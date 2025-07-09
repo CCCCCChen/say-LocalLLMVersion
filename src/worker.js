@@ -1,8 +1,131 @@
 /* eslint-disable camelcase */
 import { pipeline, env } from "@xenova/transformers";
+import { defaultModelConfig, findBestMirror, configureTransformersEnv } from "./utils/ModelConfig.ts";
+import { loadFunASRConfig, FunASRClient, defaultFunASRConfig } from "./utils/FunASRConfig.ts";
 
-// Disable local models
-env.allowLocalModels = false;
+// Initialize model configuration
+let modelConfig = { ...defaultModelConfig };
+let isConfigured = false;
+
+// Initialize FunASR configuration
+let funasrConfig = { ...defaultFunASRConfig };
+let funasrClient = null;
+let isFunASRReady = false;
+
+// Load FunASR config from environment variables
+try {
+    funasrConfig = loadFunASRConfig();
+    if (funasrConfig.enabled) {
+        funasrClient = new FunASRClient(funasrConfig);
+    }
+} catch (error) {
+    console.warn('Failed to load FunASR config:', error);
+}
+
+// Function to initialize configuration with best available mirror
+async function initializeConfig() {
+    if (!isConfigured) {
+        try {
+            const bestMirror = await findBestMirror(modelConfig.mirrorURLs);
+            modelConfig.remoteURL = bestMirror;
+            configureTransformersEnv(env, modelConfig);
+            isConfigured = true;
+            console.log('Model configuration initialized with mirror:', bestMirror);
+        } catch (error) {
+            console.warn('Failed to initialize model config, using defaults:', error);
+            configureTransformersEnv(env, modelConfig);
+            isConfigured = true;
+        }
+    }
+}
+
+// Function to initialize FunASR connection
+async function initializeFunASR() {
+    if (funasrClient && !isFunASRReady) {
+        try {
+            await funasrClient.connect();
+            isFunASRReady = true;
+            console.log('FunASR client connected successfully');
+            return true;
+        } catch (error) {
+            console.warn('Failed to connect to FunASR service:', error);
+            isFunASRReady = false;
+            return false;
+        }
+    }
+    return isFunASRReady;
+}
+
+// Function to transcribe with FunASR
+async function transcribeWithFunASR(audio, options = {}) {
+    try {
+        // Initialize FunASR if not ready
+        const isReady = await initializeFunASR();
+        if (!isReady) {
+            throw new Error('FunASR service not available');
+        }
+
+        // Convert audio to ArrayBuffer if needed
+        let audioBuffer;
+        if (audio instanceof ArrayBuffer) {
+            audioBuffer = audio;
+        } else if (audio.buffer) {
+            audioBuffer = audio.buffer;
+        } else {
+            throw new Error('Invalid audio format for FunASR');
+        }
+
+        // Send progress update
+        self.postMessage({
+            status: 'progress',
+            task: 'automatic-speech-recognition',
+            model: 'funasr-runtime-sdk-online-cpu',
+            progress: 0.1,
+            loaded: 1,
+            total: 10,
+            file: 'funasr-model',
+            name: 'FunASR Model'
+        });
+
+        // Perform transcription
+        const text = await funasrClient.transcribe(audioBuffer, options);
+
+        // Send completion message
+        const result = {
+            text: text,
+            chunks: [{
+                text: text,
+                timestamp: [0, null]
+            }]
+        };
+
+        self.postMessage({
+            status: 'complete',
+            task: 'automatic-speech-recognition',
+            data: result
+        });
+
+        return result;
+
+    } catch (error) {
+        console.error('FunASR transcription failed:', error);
+        
+        // Send error message
+        self.postMessage({
+            status: 'error',
+            task: 'automatic-speech-recognition',
+            error: error.message
+        });
+
+        // Fallback to Whisper if enabled
+        if (funasrConfig.fallbackToWhisper) {
+            console.log('Falling back to Whisper model...');
+            throw error; // Let the main transcribe function handle Whisper fallback
+        } else {
+            throw error;
+        }
+    }
+}
 
 // Define model factories
 // Ensures only one model is created of each type
@@ -20,6 +143,9 @@ class PipelineFactory {
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
+            // Initialize configuration before creating pipeline
+            await initializeConfig();
+            
             this.instance = pipeline(this.task, this.model, {
                 quantized: this.quantized,
                 progress_callback,
@@ -70,6 +196,13 @@ const transcribe = async (
     subtask,
     language,
 ) => {
+    // Check if this is a FunASR model
+    if (model === 'funasr-runtime-sdk-online-cpu') {
+        return await transcribeWithFunASR(audio, {
+            format: 'wav',
+            sampleRate: 16000
+        });
+    }
 
     const isDistilWhisper = model.startsWith("distil-whisper/");
 

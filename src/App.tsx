@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import NoteList from './components/NoteList';
 import NoteEditor from './components/NoteEditor';
-import { useTranscriber } from "./hooks/useTranscriber";
+import { useEnhancedTranscriber } from "./hooks/useEnhancedTranscriber";
 import { AudioManager } from './components/AudioManager';
+import TranscriptionSettings from './components/TranscriptionSettings';
 
 interface NoteVersion {
   content: string;
@@ -21,7 +22,7 @@ interface Note {
 }
 
 function App() {
-    const transcriber = useTranscriber();
+    const transcriber = useEnhancedTranscriber();
     const [notes, setNotes] = useState<Note[]>([]);
     const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -250,6 +251,26 @@ function App() {
                 )}
                 <section className={`flex-grow p-2 md:p-4 ${showNoteList ? 'md:w-[calc(100%-18rem)]' : 'w-full'}`}>
                     <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
+                        {/* 转录设置 */}
+                        <TranscriptionSettings
+                            model={transcriber.model}
+                            setModel={transcriber.setModel}
+                            multilingual={transcriber.multilingual}
+                            setMultilingual={transcriber.setMultilingual}
+                            quantized={transcriber.quantized}
+                            setQuantized={transcriber.setQuantized}
+                            subtask={transcriber.subtask}
+                            setSubtask={transcriber.setSubtask}
+                            language={transcriber.language}
+                            setLanguage={transcriber.setLanguage}
+                            availableProviders={transcriber.availableProviders}
+                            currentProvider={transcriber.currentProvider}
+                            serviceStatus={transcriber.serviceStatus}
+                            refreshServices={transcriber.refreshServices}
+                            hotwords={transcriber.hotwords}
+                            setHotwords={transcriber.setHotwords}
+                        />
+
                         <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
                             <h2 className="text-xl md:text-2xl font-semibold mb-4">Quick Record</h2>
                             <AudioManager 

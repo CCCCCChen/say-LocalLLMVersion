@@ -335,9 +335,9 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                             <label className="text-sm text-slate-600">
                                 Loading model files... (only run once)
                             </label>
-                            {transcriber.progressItems.map((data) => (
+                            {transcriber.progressItems.map((data, index) => (
                                 <Progress
-                                    key={data.file}
+                                    key={`${data.file}-${index}`}
                                     text={data.file}
                                     percentage={data.progress}
                                 />
