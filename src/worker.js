@@ -1,25 +1,33 @@
 /* eslint-disable camelcase */
 import { pipeline, env } from "@xenova/transformers";
-import { defaultModelConfig, findBestMirror, configureTransformersEnv } from "./utils/ModelConfig.ts";
+import { defaultModelConfig, configureTransformersEnv } from "./utils/ModelConfig.ts";
 
-// Initialize model configuration
+// === 强制本地模型配置 ===
+// 此Worker已配置为仅使用本地存储的模型，不会尝试从网络下载模型
+// 请确保模型文件已下载到 public/models/ 目录
+
+// 初始化本地模型配置
 let modelConfig = { ...defaultModelConfig };
 let isConfigured = false;
 
-// Function to initialize configuration with best available mirror
+// 强制使用本地模型的初始化函数
 async function initializeConfig() {
     if (!isConfigured) {
-        try {
-            const bestMirror = await findBestMirror(modelConfig.mirrorURLs);
-            modelConfig.remoteURL = bestMirror;
-            configureTransformersEnv(env, modelConfig);
-            isConfigured = true;
-            console.log('Model configuration initialized with mirror:', bestMirror);
-        } catch (error) {
-            console.warn('Failed to initialize model config, using defaults:', error);
-            configureTransformersEnv(env, modelConfig);
-            isConfigured = true;
-        }
+        // 强制配置为本地模式，禁用所有网络请求
+        modelConfig.useLocalModels = true;
+        modelConfig.remoteURL = '';
+        modelConfig.mirrorURLs = [];
+        
+        // 配置transformers环境为本地模式
+        configureTransformersEnv(env, modelConfig);
+        
+        // 设置本地模型路径
+        env.localModelPath = '/models/';
+        env.allowRemoteModels = false;
+        env.allowLocalModels = true;
+        
+        isConfigured = true;
+        console.log('本地模型配置已初始化 - 仅使用本地存储的模型');
     }
 }
 
@@ -39,13 +47,23 @@ class PipelineFactory {
 
     static async getInstance(progress_callback = null) {
         if (this.instance === null) {
-            // Initialize configuration before creating pipeline
+            // 强制初始化本地模型配置
             await initializeConfig();
+            
+            // 验证模型是否为本地模型路径
+            if (!this.model || this.model.includes('http')) {
+                throw new Error('仅允许使用本地模型！请确保模型已下载到 public/models/ 目录');
+            }
+            
+            console.log(`正在加载本地模型: ${this.model}`);
             
             this.instance = pipeline(this.task, this.model, {
                 quantized: this.quantized,
                 progress_callback,
-
+                
+                // 强制使用本地模型
+                local_files_only: true,
+                
                 // For medium models, we need to load the `no_attentions` revision to avoid running out of memory
                 revision: this.model.includes("/whisper-medium") ? "no_attentions" : "main"
             });
@@ -92,10 +110,24 @@ const transcribe = async (
     subtask,
     language,
 ) => {
+    // === 本地模型验证 ===
+    // 确保只使用本地存储的模型，拒绝任何网络模型请求
+    if (!model || model.includes('http') || model.includes('huggingface.co') || model.includes('hf-mirror.com')) {
+        const errorMsg = '错误：仅允许使用本地模型！请确保模型已下载到 public/models/ 目录';
+        console.error(errorMsg);
+        self.postMessage({
+            status: "error",
+            task: "automatic-speech-recognition",
+            data: new Error(errorMsg),
+        });
+        return null;
+    }
+    
+    console.log(`开始使用本地模型进行转录: ${model}`);
 
     const isDistilWhisper = model.startsWith("distil-whisper/");
 
-    // Use the model name directly since it's already properly formatted in ModelSelector.tsx
+    // 使用本地模型名称
     const modelName = model;
 
     const p = AutomaticSpeechRecognitionPipelineFactory;
