@@ -5,9 +5,8 @@ interface ModelOption {
     name: string;
     description: string;
     isEnglishOnly: boolean;
-    size: 'tiny' | 'small' | 'base' | 'medium' | 'large' | 'large-v2' | 'funasr';
+    size: 'tiny' | 'small' | 'base' | 'medium' | 'large' | 'large-v2';
     isBeta?: boolean;
-    isRemoteService?: boolean;
 }
 
 const modelOptions: ModelOption[] = [
@@ -105,14 +104,6 @@ const modelOptions: ModelOption[] = [
         isEnglishOnly: false,
         size: 'medium',
         isBeta: true
-    },
-    {
-        id: 'funasr-runtime-sdk-online-cpu',
-        name: 'FunASR (Docker Service)',
-        description: 'High-performance Chinese ASR service via Docker deployment',
-        isEnglishOnly: false,
-        size: 'funasr',
-        isRemoteService: true
     }
 ];
 
@@ -145,15 +136,9 @@ export function ModelSelector({ selectedModel, onModelChange, className = '' }: 
                 ))}
             </select>
             <p className="text-sm text-slate-500">
-                {(() => {
-                    const selectedOption = modelOptions.find(m => m.id === selectedModel);
-                    if (selectedOption?.isRemoteService) {
-                        return 'Remote service - requires Docker deployment and network connection.';
-                    }
-                    return selectedOption?.isEnglishOnly 
-                        ? 'This model is optimized for English only.'
-                        : 'This model supports multiple languages.';
-                })()}
+                {modelOptions.find(m => m.id === selectedModel)?.isEnglishOnly 
+                    ? 'This model is optimized for English only.'
+                    : 'This model supports multiple languages.'}
             </p>
         </div>
     );
