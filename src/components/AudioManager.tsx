@@ -4,11 +4,59 @@ import Modal from "./modal/Modal";
 import { UrlInput } from "./modal/UrlInput";
 import AudioPlayer from "./AudioPlayer";
 import { TranscribeButton } from "./TranscribeButton";
+import { WorkflowButton } from "./WorkflowButton";
 import Constants from "../utils/Constants";
 import { Transcriber } from "../hooks/useTranscriber";
+import { useWorkflow } from "../hooks/useWorkflow";
 import Progress from "./Progress";
 import AudioRecorder from "./AudioRecorder";
 import { ModelSelector } from "./ModelSelector";
+import { WorkflowConfig } from "./WorkflowConfig";
+import { defaultDifyConfig } from "../utils/DifyAPI";
+
+// Utility function to convert AudioBuffer to WAV Blob
+function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
+    const length = audioBuffer.length;
+    const sampleRate = audioBuffer.sampleRate;
+    const numberOfChannels = audioBuffer.numberOfChannels;
+    
+    // Create a new ArrayBuffer for the WAV file
+    const arrayBuffer = new ArrayBuffer(44 + length * numberOfChannels * 2);
+    const view = new DataView(arrayBuffer);
+    
+    // WAV header
+    const writeString = (offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * numberOfChannels * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numberOfChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numberOfChannels * 2, true);
+    view.setUint16(32, numberOfChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * numberOfChannels * 2, true);
+    
+    // Convert audio data
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+        for (let channel = 0; channel < numberOfChannels; channel++) {
+            const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(channel)[i]));
+            view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+            offset += 2;
+        }
+    }
+    
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
 
 export enum AudioSource {
     URL = "URL",
@@ -22,6 +70,7 @@ interface Props {
 }
 
 export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
+    const workflow = useWorkflow();
     const [progress, setProgress] = useState<number | undefined>(undefined);
     const [audioData, setAudioData] = useState<{
         buffer: AudioBuffer;
@@ -32,13 +81,17 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
     const [audioDownloadUrl, setAudioDownloadUrl] = useState<string | undefined>(undefined);
     const [showUrlModal, setShowUrlModal] = useState(false);
     const [showRecordModal, setShowRecordModal] = useState(false);
+    const [difyConfig, setDifyConfig] = useState(defaultDifyConfig);
 
     const isAudioLoading = progress !== undefined;
 
-    const resetAudio = () => {
+    const resetAudio = useCallback(() => {
         setAudioData(undefined);
         setAudioDownloadUrl(undefined);
-    };
+        setProgress(undefined);
+        // Note: transcriber doesn't have a reset method, it manages its own state
+        workflow.reset();
+    }, [workflow]);
 
     // Watch for transcription completion
     useEffect(() => {
@@ -151,6 +204,25 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
         transcriber.onInputChange(); // Reset transcriber state
         transcriber.start(audioData.buffer);
     }, [audioData, transcriber]);
+
+    const handleWorkflowClick = useCallback(async () => {
+        if (audioData) {
+            try {
+                // Convert AudioBuffer to WAV format for workflow processing
+                const audioBlob = audioBufferToWav(audioData.buffer, audioData.mimeType);
+                const fileName = `audio-${Date.now()}.${audioData.mimeType.split('/')[1] || 'wav'}`;
+                await workflow.processAudio(audioBlob, fileName);
+            } catch (error) {
+                console.error('Workflow processing failed:', error);
+            }
+        }
+    }, [audioData, workflow]);
+
+    const handleConfigChange = useCallback((config: Partial<typeof difyConfig>) => {
+        const newConfig = { ...difyConfig, ...config };
+        setDifyConfig(newConfig);
+        workflow.updateConfig(newConfig);
+    }, [difyConfig, workflow]);
 
     const handleModelChange = useCallback((modelId: string) => {
         transcriber.setModel(modelId);
@@ -291,6 +363,12 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                 onModelChange={handleModelChange}
                 className="mb-6"
             />
+            
+            <WorkflowConfig
+                config={difyConfig}
+                onConfigChange={handleConfigChange}
+                className="mb-6"
+            />
 
             {isAudioLoading && (
                 <div className="w-full bg-gray-200 rounded-full h-1">
@@ -305,19 +383,28 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                 <div className="space-y-4">
                     <AudioPlayer audioUrl={audioData.url} mimeType={audioData.mimeType} />
                     
-                    <div className="flex items-center justify-between gap-4">
-                        <TranscribeButton
-                            onClick={handleTranscribeClick}
-                            isModelLoading={transcriber.isModelLoading}
-                            isTranscribing={transcriber.isBusy}
-                        />
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <TranscribeButton
+                                onClick={handleTranscribeClick}
+                                isModelLoading={transcriber.isModelLoading}
+                                isTranscribing={transcriber.isBusy}
+                            />
+                            
+                            <WorkflowButton
+                                onClick={handleWorkflowClick}
+                                isProcessing={workflow.state.isProcessing}
+                            />
+                        </div>
                         
-                        <button
-                            onClick={resetAudio}
-                            className="px-4 py-2 text-red-500 hover:text-red-600 transition-colors"
-                        >
-                            Cancel
-                        </button>
+                        <div className="flex justify-center">
+                            <button
+                                onClick={resetAudio}
+                                className="px-4 py-2 text-red-500 hover:text-red-600 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
                     </div>
 
                     <button
@@ -342,6 +429,56 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                                     percentage={data.progress}
                                 />
                             ))}
+                        </div>
+                    )}
+                    
+                    {workflow.state.isProcessing && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                                <span className="text-sm font-medium text-purple-800">Workflow Processing</span>
+                            </div>
+                            {workflow.state.progress && (
+                                <p className="text-sm text-purple-600">{workflow.state.progress}</p>
+                            )}
+                        </div>
+                    )}
+                    
+                    {workflow.state.error && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <h4 className="text-sm font-medium text-red-800 mb-1">Workflow Error</h4>
+                                    <p className="text-sm text-red-600">{workflow.state.error}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {workflow.state.result && (
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div className="flex-1">
+                                    <h4 className="text-sm font-medium text-green-800 mb-2">Workflow Result</h4>
+                                    <div className="bg-white rounded border p-3 text-sm">
+                                        <pre className="whitespace-pre-wrap text-slate-700 overflow-x-auto">
+                                            {JSON.stringify(workflow.state.result.data.outputs, null, 2)}
+                                        </pre>
+                                    </div>
+                                    <div className="mt-2 text-xs text-green-600">
+                                        Completed in {workflow.state.result.data.elapsed_time}ms
+                                        {workflow.state.result.data.total_tokens && (
+                                            <span> • {workflow.state.result.data.total_tokens} tokens used</span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

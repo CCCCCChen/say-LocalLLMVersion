@@ -10,7 +10,7 @@ export interface ModelConfig {
 
 // Default configuration
 export const defaultModelConfig: ModelConfig = {
-    useLocalModels: true,
+    useLocalModels: false,
     remoteURL: 'https://huggingface.co/',
     mirrorURLs: [
         'https://hf-mirror.com/',  // 国内镜像

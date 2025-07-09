@@ -1,0 +1,12 @@
+{
+    "inputs": {
+        "speechFile": [{
+                "type": "audio",
+                "transfer_method": "local_file",
+                "upload_file_id": "77f9b9a1-209f-49c9-a8b9-c6e95bc9e805"
+            }
+        ]
+    },
+    "response_mode": "blocking",
+    "user": "default-user"
+}

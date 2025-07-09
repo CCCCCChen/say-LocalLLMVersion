@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>页面二 - 文件管理</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* 文件管理页面样式 */
+        .file-manager {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .file-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .upload-btn, .logs-btn {
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            display: flex;
+            align-items: center;
+        }
+
+        .logs-btn {
+            background-color: #722ed1;
+        }
+
+        .upload-btn:hover {
+            background-color: #40a9ff;
+        }
+
+        .logs-btn:hover {
+            background-color: #9254de;
+        }
+
+        .upload-btn i, .logs-btn i {
+            margin-right: 8px;
+        }
+
+        .file-table-container {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .file-table th, .file-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-table th {
+            background-color: #fafafa;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .file-table tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        /* 文件操作按钮样式 */
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .parse-btn {
+            background-color: #4a6cf7;
+            color: white;
+        }
+        
+        .parse-btn:hover {
+            background-color: #3a5ce5;
+        }
+        
+        .retry-btn {
+            background-color: #f76e4a;
+            color: white;
+        }
+        
+        .retry-btn:hover {
+            background-color: #e55c3a;
+        }
+        
+        .download-btn {
+            background-color: #4acf7d;
+            color: white;
+        }
+        
+        .download-btn:hover {
+            background-color: #3ab96a;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending {
+            background-color: #e6f7ff;
+            color: #1890ff;
+        }
+
+        .status-processing {
+            background-color: #fff7e6;
+            color: #fa8c16;
+        }
+
+        .status-completed {
+            background-color: #f6ffed;
+            color: #52c41a;
+        }
+
+        .status-failed {
+            background-color: #fff1f0;
+            color: #f5222d;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 0;
+            color: #999;
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            color: #d9d9d9;
+        }
+
+        /* 上传模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            width: 500px;
+            max-width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .modal-title {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #f0f0f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .cancel-btn {
+            padding: 8px 16px;
+            background-color: white;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .cancel-btn:hover {
+            color: #40a9ff;
+            border-color: #40a9ff;
+        }
+
+        .submit-btn {
+            padding: 8px 16px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .submit-btn:hover {
+            background-color: #40a9ff;
+        }
+
+        .submit-btn:disabled {
+            background-color: #d9d9d9;
+            cursor: not-allowed;
+        }
+
+        /* 文件上传区域样式 */
+        .file-upload-area {
+            border: 2px dashed #d9d9d9;
+            border-radius: 4px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            margin-bottom: 16px;
+        }
+
+        .file-upload-area:hover {
+            border-color: #40a9ff;
+        }
+
+        .file-upload-area i {
+            font-size: 32px;
+            color: #d9d9d9;
+            margin-bottom: 8px;
+        }
+
+        .file-upload-text {
+            color: #666;
+        }
+
+        .selected-file {
+            display: none;
+            margin-top: 16px;
+            padding: 12px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .selected-file.show {
+            display: block;
+        }
+
+        .file-name {
+            font-weight: 500;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-content">
+        <h2>文件管理</h2>
+        <div class="file-manager">
+            <div class="file-header">
+                <h3>文件列表</h3>
+                <div class="header-actions">
+                    <button id="logs-btn" class="logs-btn">
+                        <i>📋</i> 查看日志
+                    </button>
+                    <button id="upload-btn" class="upload-btn">
+                        <i>+</i> 上传文件
+                    </button>
+                </div>
+            </div>
+            <div id="file-table-container" class="file-table-container">
+                <table class="file-table">
+                    <thead>
+                        <tr>
+                            <th>文件名称</th>
+                            <th>上传时间</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list">
+                        <!-- 文件列表将通过JavaScript动态添加 -->
+                    </tbody>
+                </table>
+                <div id="empty-state" class="empty-state">
+                    <i>📁</i>
+                    <div>暂无文件，请上传文件</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传模态框 -->
+    <div id="upload-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">上传文件</h3>
+                <button class="close-btn" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="file-upload-area" class="file-upload-area">
+                    <i>📤</i>
+                    <div class="file-upload-text">点击或拖拽文件到此处上传</div>
+                    <input type="file" id="file-input" style="display: none;">
+                </div>
+                <div id="selected-file" class="selected-file">
+                    <div>已选择文件：</div>
+                    <div id="file-name" class="file-name"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" id="cancel-upload">取消</button>
+                <button class="submit-btn" id="submit-upload" disabled>上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志模态框 -->
+    <div id="logs-modal" class="modal">
+        <div class="modal-content" style="width: 700px; max-width: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title">处理日志</h3>
+                <button class="close-btn" id="close-logs-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="logs-container" style="max-height: 400px; overflow-y: auto;">
+                    <table class="file-table" id="logs-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>状态</th>
+                                <th>处理时间</th>
+                                <th>创建时间</th>
+                                <th>用户</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logs-list">
+                            <!-- 日志列表将通过JavaScript动态添加 -->
+                        </tbody>
+                    </table>
+                    <div id="logs-empty-state" class="empty-state">
+                        <div>暂无日志记录</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cancel-btn" id="close-logs">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // API配置
+            const API_BASE_URL = 'http://10.12.3.9';
+            const API_KEY = 'app-GCnfnYsa7TKjRRTAMQWv5EtS'; // 替换为您的API密钥
+            const USER_ID = 'chc';
+            
+            // DOM元素
+            const fileList = document.getElementById('file-list');
+            const emptyState = document.getElementById('empty-state');
+            const uploadBtn = document.getElementById('upload-btn');
+            const logsBtn = document.getElementById('logs-btn');
+            const uploadModal = document.getElementById('upload-modal');
+            const logsModal = document.getElementById('logs-modal');
+            const closeModal = document.getElementById('close-modal');
+            const closeLogsModal = document.getElementById('close-logs-modal');
+            const closeLogsBtn = document.getElementById('close-logs');
+            const cancelUpload = document.getElementById('cancel-upload');
+            const fileUploadArea = document.getElementById('file-upload-area');
+            const fileInput = document.getElementById('file-input');
+            const selectedFile = document.getElementById('selected-file');
+            const fileName = document.getElementById('file-name');
+            const submitUpload = document.getElementById('submit-upload');
+            const logsList = document.getElementById('logs-list');
+            const logsEmptyState = document.getElementById('logs-empty-state');
+            
+            // 文件数据存储
+            let files = [];
+            let selectedFileData = null;
+            let workflowLogs = [];
+            
+            // 初始化页面
+            function init() {
+                // 模拟数据 - 实际应用中应该从API获取
+                files = [
+                    { id: '1', name: '示例文件1.pdf', uploadTime: Date.now() - 3600000, status: 'pending', workflow_run_id: null },
+                    { id: '2', name: '示例文件2.docx', uploadTime: Date.now() - 7200000, status: 'processing', workflow_run_id: 'workflow-123' },
+                    { id: '3', name: '示例文件3.txt', uploadTime: Date.now() - 86400000, status: 'completed', workflow_run_id: 'workflow-456' },
+                    { id: '4', name: '示例文件4.jpg', uploadTime: Date.now() - 172800000, status: 'failed', workflow_run_id: 'workflow-789' }
+                ];
+                
+                renderFileList();
+                setupEventListeners();
+            }
+            
+            // 渲染文件列表
+            function renderFileList() {
+                if (files.length === 0) {
+                    fileList.innerHTML = '';
+                    emptyState.style.display = 'flex';
+                    return;
+                }
+                
+                emptyState.style.display = 'none';
+                fileList.innerHTML = '';
+                
+                files.forEach(file => {
+                    const tr = document.createElement('tr');
+                    
+                    // 文件名
+                    const nameTd = document.createElement('td');
+                    nameTd.textContent = file.name;
+                    tr.appendChild(nameTd);
+                    
+                    // 上传时间
+                    const timeTd = document.createElement('td');
+                    timeTd.textContent = formatDate(file.uploadTime);
+                    tr.appendChild(timeTd);
+                    
+                    // 状态
+                    const statusTd = document.createElement('td');
+                    const statusBadge = document.createElement('span');
+                    statusBadge.className = `status-badge status-${file.status}`;
+                    statusBadge.textContent = getStatusText(file.status);
+                    statusTd.appendChild(statusBadge);
+                    tr.appendChild(statusTd);
+                    
+                    // 操作
+                    const actionsTd = document.createElement('td');
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'file-actions';
+                    
+                    // 解析按钮
+                    if (file.status === 'pending') {
+                        const parseBtn = document.createElement('button');
+                        parseBtn.className = 'action-btn parse-btn';
+                        parseBtn.textContent = '开始解析';
+                        parseBtn.onclick = () => startParsing(file.id);
+                        actionsDiv.appendChild(parseBtn);
+                    }
+                    
+                    // 重新解析按钮（针对失败的文件）
+                    if (file.status === 'failed') {
+                        const retryBtn = document.createElement('button');
+                        retryBtn.className = 'action-btn parse-btn retry-btn';
+                        retryBtn.textContent = '重新解析';
+                        retryBtn.onclick = () => startParsing(file.id);
+                        actionsDiv.appendChild(retryBtn);
+                    }
+                    
+                    // 下载按钮
+                    if (file.status === 'completed') {
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.className = 'action-btn download-btn';
+                        downloadBtn.textContent = '下载结果';
+                        downloadBtn.onclick = () => downloadResult(file.id);
+                        actionsDiv.appendChild(downloadBtn);
+                    }
+                    
+                    actionsTd.appendChild(actionsDiv);
+                    tr.appendChild(actionsTd);
+                    
+                    fileList.appendChild(tr);
+                });
+            }
+            
+            // 设置事件监听器
+            function setupEventListeners() {
+                // 上传按钮点击事件
+                uploadBtn.addEventListener('click', openUploadModal);
+                
+                // 关闭模态框事件
+                closeModal.addEventListener('click', closeUploadModal);
+                cancelUpload.addEventListener('click', closeUploadModal);
+                
+                // 文件上传区域点击事件
+                fileUploadArea.addEventListener('click', () => fileInput.click());
+                
+                // 文件选择事件
+                fileInput.addEventListener('change', handleFileSelect);
+                
+                // 提交上传事件
+                submitUpload.addEventListener('click', uploadFile);
+                
+                // 日志按钮点击事件
+                logsBtn.addEventListener('click', openLogsModal);
+                
+                // 关闭日志模态框事件
+                closeLogsModal.addEventListener('click', closeLogsModalFunc);
+                closeLogsBtn.addEventListener('click', closeLogsModalFunc);
+            }
+            
+            // 打开上传模态框
+            function openUploadModal() {
+                uploadModal.classList.add('show');
+                resetUploadForm();
+            }
+            
+            // 关闭上传模态框
+            function closeUploadModal() {
+                uploadModal.classList.remove('show');
+                resetUploadForm();
+            }
+            
+            // 重置上传表单
+            function resetUploadForm() {
+                fileInput.value = '';
+                selectedFile.classList.remove('show');
+                fileName.textContent = '';
+                selectedFileData = null;
+                submitUpload.disabled = true;
+            }
+            
+            // 处理文件选择
+            function handleFileSelect(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    selectedFileData = file;
+                    fileName.textContent = file.name;
+                    selectedFile.classList.add('show');
+                    submitUpload.disabled = false;
+                }
+            }
+            
+            // 上传文件
+            async function uploadFile() {
+                if (!selectedFileData) return;
+                
+                submitUpload.disabled = true;
+                submitUpload.textContent = '上传中...';
+                
+                try {
+                    const formData = new FormData();
+                    formData.append('file', selectedFileData);
+                    formData.append('user', USER_ID);
+                    
+                    const response = await fetch(`${API_BASE_URL}/v1/files/upload`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${API_KEY}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`上传失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('上传成功:', data);
+                    
+                    // 添加新文件到列表
+                    const newFile = {
+                        id: data.id,
+                        name: selectedFileData.name,
+                        uploadTime: Date.now(),
+                        status: 'pending',
+                        workflow_run_id: null
+                    };
+                    
+                    files.unshift(newFile);
+                    renderFileList();
+                    closeUploadModal();
+                    
+                    return data;
+                } catch (error) {
+                    console.error('上传出错:', error);
+                    alert(`上传失败: ${error.message}`);
+                    submitUpload.disabled = false;
+                    submitUpload.textContent = '上传';
+                }
+            }
+            
+            // 开始解析文件
+            async function startParsing(fileId) {
+                const file = files.find(f => f.id === fileId);
+                if (!file) return;
+                
+                try {
+                    // 更新状态为处理中
+                    file.status = 'processing';
+                    renderFileList();
+                    
+                    const response = await fetch(`${API_BASE_URL}/v1/workflows/run`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${API_KEY}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            inputs: {
+                                speechFile: {
+                                    transfer_method: 'local_file',
+                                    upload_file_id: fileId,
+                                    type: 'audio'
+                                }
+                            },
+                            response_mode: 'blocking',
+                            user: USER_ID
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`解析失败: ${response.status}`);
+                    }
+                    
+                    // 处理流式响应
+                    if (response.headers.get('content-type').includes('text/event-stream')) {
+                        const reader = response.body.getReader();
+                        let workflowRunId = null;
+                        let workflowStatus = null;
+                        
+                        // 处理流式数据
+                        const processStream = async () => {
+                            try {
+                                while (true) {
+                                    const { done, value } = await reader.read();
+                                    if (done) break;
+                                    
+                                    // 将二进制数据转换为文本
+                                    const text = new TextDecoder().decode(value);
+                                    console.log('流式响应:', text);
+                                    
+                                    // 解析每一行数据
+                                    const lines = text.split('\n').filter(line => line.trim().startsWith('data:'));
+                                    
+                                    for (const line of lines) {
+                                        try {
+                                            // 提取JSON数据
+                                            const jsonStr = line.substring(line.indexOf('{'));
+                                            const eventData = JSON.parse(jsonStr);
+                                            
+                                            console.log('事件数据:', eventData);
+                                            
+                                            // 处理不同类型的事件
+                                            if (eventData.event === 'workflow_started') {
+                                                workflowRunId = eventData.workflow_run_id;
+                                                file.workflow_run_id = workflowRunId;
+                                                console.log(`工作流开始: ${workflowRunId}`);
+                                            } else if (eventData.event === 'workflow_finished') {
+                                                workflowStatus = eventData.data.status;
+                                                console.log(`工作流完成: ${workflowStatus}`);
+                                                
+                                                // 更新文件状态
+                                                if (workflowStatus === 'succeeded') {
+                                                    file.status = 'completed';
+                                                } else if (workflowStatus === 'failed') {
+                                                    file.status = 'failed';
+                                                }
+                                                renderFileList();
+                                            }
+                                        } catch (e) {
+                                            console.error('解析事件数据出错:', e);
+                                        }
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('读取流出错:', e);
+                                file.status = 'failed';
+                                renderFileList();
+                            }
+                        };
+                        
+                        // 开始处理流
+                        await processStream();
+                        
+                        // 如果没有获取到最终状态，开始轮询检查
+                        if (!workflowStatus && workflowRunId) {
+                            setTimeout(() => checkParsingStatus(file), 5000);
+                        }
+                        
+                        return { id: workflowRunId };
+                    } else {
+                        // 处理常规JSON响应
+                        const data = await response.json();
+                        console.log('解析开始:', data);
+                        
+                        // 保存workflow_run_id用于后续查询状态
+                        file.workflow_run_id = data.id;
+                        
+                        // 开始轮询检查解析状态
+                        checkParsingStatus(file);
+                        
+                        return data;
+                    }
+                } catch (error) {
+                    console.error('解析出错:', error);
+                    alert(`解析失败: ${error.message}`);
+                    
+                    // 更新状态为失败
+                    file.status = 'failed';
+                    renderFileList();
+                }
+            }
+            
+            // 检查解析状态
+            async function checkParsingStatus(file) {
+                if (!file.workflow_run_id) return;
+                console.log(`检查解析状态: ${file.workflow_run_id}`);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/v1/workflows/runs/${file.workflow_run_id}`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${API_KEY}`
+                        }
+                    });
+
+                    if (response.status_code === 200){
+                        console.log('解析完成');
+                    }
+                    
+                    if (!response.ok) {
+                        throw new Error(`获取状态失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('解析状态:', data);
+                    
+                    // 更新文件状态
+                    if (data.status === 'succeeded') {
+                        file.status = 'completed';
+                        renderFileList();
+                    } else if (data.status === 'failed') {
+                        file.status = 'failed';
+                        renderFileList();
+                    } else if (data.status === 'running' || data.status === 'pending') {
+                        // 继续轮询
+                        setTimeout(() => checkParsingStatus(file), 5000);
+                    }
+                    
+                    return data;
+                } catch (error) {
+                    console.error('获取状态出错:', error);
+                    
+                    // 更新状态为失败
+                    file.status = 'failed';
+                    renderFileList();
+                }
+            }
+            
+            // 下载结果
+            function downloadResult(fileId) {
+                const file = files.find(f => f.id === fileId);
+                if (!file || !file.workflow_run_id) return;
+                
+                // 实际应用中应该调用API获取下载链接
+                alert(`下载文件: ${file.name}，工作流ID: ${file.workflow_run_id}`);
+            }
+            
+            // 获取工作流日志
+            async function fetchWorkflowLogs() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/v1/workflows/logs`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${API_KEY}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`获取日志失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('获取日志成功:', data);
+                    
+                    workflowLogs = data.data || [];
+                    renderLogsList();
+                    
+                    return data;
+                } catch (error) {
+                    console.error('获取日志出错:', error);
+                    alert(`获取日志失败: ${error.message}`);
+                }
+            }
+            
+            // 渲染日志列表
+            function renderLogsList() {
+                if (workflowLogs.length === 0) {
+                    logsList.innerHTML = '';
+                    logsEmptyState.style.display = 'block';
+                    return;
+                }
+                
+                logsEmptyState.style.display = 'none';
+                logsList.innerHTML = '';
+                
+                workflowLogs.forEach(log => {
+                    const tr = document.createElement('tr');
+                    
+                    // ID
+                    const idTd = document.createElement('td');
+                    idTd.textContent = log.id.substring(0, 8) + '...';
+                    idTd.title = log.id;
+                    tr.appendChild(idTd);
+                    
+                    // 状态
+                    const statusTd = document.createElement('td');
+                    const statusBadge = document.createElement('span');
+                    const status = log.workflow_run.status;
+                    statusBadge.className = `status-badge status-${status === 'succeeded' ? 'completed' : status === 'failed' ? 'failed' : 'processing'}`;
+                    statusBadge.textContent = status === 'succeeded' ? '成功' : status === 'failed' ? '失败' : '处理中';
+                    statusTd.appendChild(statusBadge);
+                    tr.appendChild(statusTd);
+                    
+                    // 处理时间
+                    const timeTd = document.createElement('td');
+                    timeTd.textContent = log.workflow_run.elapsed_time ? `${log.workflow_run.elapsed_time.toFixed(2)}秒` : '-';
+                    tr.appendChild(timeTd);
+                    
+                    // 创建时间
+                    const createTd = document.createElement('td');
+                    createTd.textContent = formatDate(log.created_at);
+                    tr.appendChild(createTd);
+                    
+                    // 用户
+                    const userTd = document.createElement('td');
+                    userTd.textContent = log.created_by_end_user ? log.created_by_end_user.session_id : '-';
+                    tr.appendChild(userTd);
+                    
+                    logsList.appendChild(tr);
+                });
+            }
+            
+            // 打开日志模态框
+            function openLogsModal() {
+                logsModal.classList.add('show');
+                fetchWorkflowLogs();
+            }
+            
+            // 关闭日志模态框
+            function closeLogsModalFunc() {
+                logsModal.classList.remove('show');
+            }
+            
+            // 格式化日期
+            function formatDate(timestamp) {
+                const date = new Date(timestamp);
+                return `${date.getFullYear()}-${padZero(date.getMonth() + 1)}-${padZero(date.getDate())} ${padZero(date.getHours())}:${padZero(date.getMinutes())}`;
+            }
+            
+            // 补零
+            function padZero(num) {
+                return num < 10 ? `0${num}` : num;
+            }
+            
+            // 获取状态文本
+            function getStatusText(status) {
+                switch (status) {
+                    case 'pending': return '待处理';
+                    case 'processing': return '处理中';
+                    case 'completed': return '已完成';
+                    case 'failed': return '失败';
+                    default: return '未知';
+                }
+            }
+            
+            // 初始化页面
+            init();
+        });
+    </script>
+</body>
+</html>
