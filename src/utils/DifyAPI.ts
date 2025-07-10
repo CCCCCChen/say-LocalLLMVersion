@@ -97,6 +97,7 @@ export class DifyAPIClient {
      * Upload a file to Dify
      */
     async uploadFile(file: File, user: string): Promise<FileUploadResponse> {
+        console.log('Uploading file:', file.name,file.type,file.size);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('user', user);
@@ -155,7 +156,23 @@ export class DifyAPIClient {
         try {
             // Step 1: Upload the audio file with proper MIME type
             // Ensure the file has a proper audio MIME type
-            const audioMimeType = audioBlob.type || 'audio/wav';
+            const fileExtension = fileName.split('.').pop()?.toLowerCase();
+            let audioMimeType;
+            switch (fileExtension) {
+                case 'mp3':
+                case 'mpeg':
+                    audioMimeType = 'audio/mpeg';
+                    break;
+                case 'wav':
+                    audioMimeType = 'audio/wav';
+                    break;
+                case 'ogg':
+                    audioMimeType = 'audio/ogg';
+                    break;
+                default:
+                    audioMimeType = audioBlob.type || 'audio/wav';
+            }
+            console.log("fileExtension: ", fileExtension, "audioMimeType: ", audioMimeType);
             const audioFile = new File([audioBlob], fileName, { type: audioMimeType });
             const uploadResponse = await this.uploadFile(audioFile, user);
             console.log('Dify API Client uploaded file:', uploadResponse);

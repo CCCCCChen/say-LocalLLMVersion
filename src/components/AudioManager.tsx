@@ -77,6 +77,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
         url: string;
         source: AudioSource;
         mimeType: string;
+        type: string;
     } | undefined>(undefined);
     const [audioDownloadUrl, setAudioDownloadUrl] = useState<string | undefined>(undefined);
     const [showUrlModal, setShowUrlModal] = useState(false);
@@ -111,6 +112,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
             url: blobUrl,
             source: AudioSource.URL,
             mimeType: mimeType,
+            type: "" //TODO: figure out how to get the type
         });
     };
 
@@ -132,6 +134,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                 url: blobUrl,
                 source: AudioSource.RECORDING,
                 mimeType: data.type,
+                type: "" //TODO: figure out how to get the type
             });
             setShowRecordModal(false);
         };
@@ -157,6 +160,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                 url: blobUrl,
                 source: AudioSource.FILE,
                 mimeType: file.type,
+                type: file.name.split('.').pop() || '',
             });
         };
         reader.readAsArrayBuffer(file);
@@ -208,9 +212,11 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
     const handleWorkflowClick = useCallback(async () => {
         if (audioData) {
             try {
+                console.log('Audio Mime Type:', audioData.mimeType, 'Audio Data:', audioData.type);
                 // Convert AudioBuffer to WAV format for workflow processing
                 const audioBlob = audioBufferToWav(audioData.buffer, audioData.mimeType);
-                const fileName = `audio-${Date.now()}.${audioData.mimeType.split('/')[1] || 'wav'}`;
+                const fileName = `audio-${Date.now()}.${audioData.type || 'wav'}`;
+                // const fileName = `audio-${Date.now()}.${audioData.mimeType.split('/')[1] || 'wav'}`;
                 await workflow.processAudio(audioBlob, fileName);
             } catch (error) {
                 console.error('Workflow processing failed:', error);
