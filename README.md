@@ -135,8 +135,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [ ] 1. 隐藏Workflow按钮
 - [ ] 2. 将Whisper模型改为调用FunASR云端API
-- [ ] 2.1 Flask API+FunASR实现实时、录音文件的转文字
-- [ ] 2.2 调用Whisper的地方改为调用FunASR的API
+   - [ ] 2.1 Flask API+FunASR实现实时、录音文件的转文字
+   - [ ] 2.2 调用Whisper的地方改为调用FunASR的API
 - [ ] 3. 把录音的解析从实时输出结果改为后台解析，前台展示状态和结果
 - [ ] 4. 调整Notes的存储方式和逻辑
 - [ ] 5. 添加用户的识别及对应Notes
