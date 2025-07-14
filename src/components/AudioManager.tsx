@@ -67,9 +67,10 @@ export enum AudioSource {
 interface Props {
     transcriber: Transcriber;
     onTranscriptionComplete?: (text: string) => void;
+    onAudioUpload?: (audioFile: File, title?: string) => Promise<string>;
 }
 
-export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
+export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUpload }: Props) {
     const workflow = useWorkflow();
     const [progress, setProgress] = useState<number | undefined>(undefined);
     const [audioData, setAudioData] = useState<{
@@ -137,6 +138,17 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
                 type: "" //TODO: figure out how to get the type
             });
             setShowRecordModal(false);
+            
+            // 如果支持后台转录，自动上传音频文件
+            if (onAudioUpload) {
+                try {
+                    const audioFile = new File([data], `recording-${Date.now()}.wav`, { type: data.type });
+                    await onAudioUpload(audioFile, 'Recorded Audio');
+                    resetAudio(); // 清理本地音频数据
+                } catch (error) {
+                    console.error('Error uploading audio for background transcription:', error);
+                }
+            }
         };
         fileReader.readAsArrayBuffer(data);
     };
@@ -146,14 +158,33 @@ export function AudioManager({ transcriber, onTranscriptionComplete }: Props) {
         if (!files || files.length === 0) return;
 
         const file = files[0];
+        resetAudio();
+        setProgress(0);
+        
+        // 如果支持后台转录，直接上传文件
+        if (onAudioUpload) {
+            try {
+                await onAudioUpload(file, file.name);
+                setProgress(undefined);
+                return;
+            } catch (error) {
+                console.error('Error uploading audio for background transcription:', error);
+                // 如果上传失败，继续本地处理
+            }
+        }
+        
         const blobUrl = URL.createObjectURL(file);
         const reader = new FileReader();
+        reader.onprogress = (event) => {
+            setProgress(event.loaded / event.total || 0);
+        };
         reader.onload = async (e) => {
             const arrayBuffer = e.target?.result as ArrayBuffer;
             if (!arrayBuffer) return;
 
             const audioCTX = new AudioContext({ sampleRate: Constants.SAMPLING_RATE });
             const decoded = await audioCTX.decodeAudioData(arrayBuffer);
+            setProgress(undefined);
             transcriber.onInputChange();
             setAudioData({
                 buffer: decoded,

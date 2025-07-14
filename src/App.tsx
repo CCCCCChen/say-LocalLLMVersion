@@ -3,22 +3,9 @@ import NoteList from './components/NoteList';
 import NoteEditor from './components/NoteEditor';
 import { useTranscriber } from "./hooks/useTranscriber";
 import { AudioManager } from './components/AudioManager';
+import { backendAPI, Note, NoteVersion, TranscriptionJob } from './utils/BackendAPI';
 
-interface NoteVersion {
-  content: string;
-  timestamp: number;
-  description: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  tags: string[];
-  versions: NoteVersion[];
-  created: number;
-  lastEdited: number;
-}
+// Note and NoteVersion interfaces are now imported from BackendAPI
 
 function App() {
     const transcriber = useTranscriber();
@@ -28,33 +15,104 @@ function App() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showNoteList, setShowNoteList] = useState(false);
     const [showInfo, setShowInfo] = useState(true);
+    const [userId, setUserId] = useState<string>('user-demo-001'); // 临时用户ID
+    const [transcriptionJobs, setTranscriptionJobs] = useState<Map<string, TranscriptionJob>>(new Map());
     const lastTranscriptionRef = useRef<string | null>(null);
 
-    useEffect(() => {
-        const loadNotes = () => {
+    // 轮询转录状态
+    const pollTranscriptionStatus = useCallback(async (noteId: string, initialJob: TranscriptionJob) => {
+        try {
+            await backendAPI.pollTranscriptionStatus(noteId, (job) => {
+                setTranscriptionJobs(prev => new Map(prev.set(noteId, job)));
+                
+                // 更新笔记状态
+                setNotes(prevNotes => 
+                    prevNotes.map(note => 
+                        note.id === noteId 
+                            ? { 
+                                ...note, 
+                                status: job.status === 'completed' ? 'completed' : 
+                                        job.status === 'failed' ? 'error' : 'transcribing',
+                                transcriptionProgress: job.progress,
+                                content: job.result || note.content,
+                                errorMessage: job.error
+                            }
+                            : note
+                    )
+                );
+            });
+        } catch (error) {
+            console.error('Error polling transcription status:', error);
+            // 更新笔记为错误状态
+            setNotes(prevNotes => 
+                prevNotes.map(note => 
+                    note.id === noteId 
+                        ? { ...note, status: 'error', errorMessage: '转录失败' }
+                        : note
+                )
+            );
+        }
+    }, []);
+
+    const loadNotes = useCallback(async () => {
+        try {
+            // 设置当前用户ID到API客户端
+            backendAPI.setUserId(userId);
+            
+            // 从后端加载笔记
+            const userNotes = await backendAPI.getNotes(userId);
+            setNotes(userNotes);
+            
+            // 检查正在进行的转录任务
+            const activeJobs = new Map<string, TranscriptionJob>();
+            for (const note of userNotes) {
+                if (note.status === 'transcribing') {
+                    try {
+                        const job = await backendAPI.getTranscriptionJobByNoteId(note.id);
+                        if (job) {
+                            activeJobs.set(note.id, job);
+                            // 开始轮询转录状态
+                            pollTranscriptionStatus(note.id, job);
+                        }
+                    } catch (error) {
+                        console.error('Error fetching transcription job for note:', note.id, error);
+                    }
+                }
+            }
+            setTranscriptionJobs(activeJobs);
+            
+        } catch (error) {
+            console.error('Error loading notes from backend:', error);
+            // 如果后端不可用，尝试从localStorage加载作为备用
             const storedNotes = localStorage.getItem('notes');
             if (storedNotes) {
                 try {
                     const parsedNotes = JSON.parse(storedNotes);
                     const migratedNotes = parsedNotes.map((note: any) => ({
                         ...note,
+                        userId: userId,
+                        status: note.status || 'completed',
                         tags: note.tags || [],
                         versions: note.versions || [],
                         created: note.created || Date.now(),
                         lastEdited: note.lastEdited || Date.now()
                     }));
                     setNotes(migratedNotes);
-                } catch (error) {
-                    console.error('Error parsing stored notes:', error);
+                } catch (parseError) {
+                    console.error('Error parsing stored notes:', parseError);
                 }
             }
+        } finally {
             setIsLoaded(true);
-        };
+        }
+    }, [userId, pollTranscriptionStatus]);
 
+    useEffect(() => {
         loadNotes();
-    }, []);
+    }, [loadNotes]);
 
     const saveNotes = useCallback((notesToSave: Note[]) => {
+        // 保留localStorage作为备用
         localStorage.setItem('notes', JSON.stringify(notesToSave));
     }, []);
 
@@ -63,21 +121,37 @@ function App() {
         saveNotes(newNotes);
     }, [saveNotes]);
 
-    const handleCreateNote = useCallback(() => {
-        const now = Date.now();
-        const newNote: Note = {
-            id: now.toString(),
-            title: 'New Note',
-            content: '',
-            tags: [],
-            versions: [],
-            created: now,
-            lastEdited: now
-        };
-        updateNotes([...notes, newNote]);
-        setSelectedNoteId(newNote.id);
-        return newNote.id;
-    }, [notes, updateNotes]);
+    const handleCreateNote = useCallback(async () => {
+        try {
+            const newNote = await backendAPI.createNote({
+                userId: userId,
+                title: 'New Note',
+                content: '',
+                tags: []
+            });
+            setNotes(prevNotes => [...prevNotes, newNote]);
+            setSelectedNoteId(newNote.id);
+            return newNote.id;
+        } catch (error) {
+            console.error('Error creating note:', error);
+            // 备用方案：本地创建
+            const now = Date.now();
+            const newNote: Note = {
+                id: now.toString(),
+                userId: userId,
+                title: 'New Note',
+                content: '',
+                tags: [],
+                versions: [],
+                created: now,
+                lastEdited: now,
+                status: 'draft'
+            };
+            updateNotes([...notes, newNote]);
+            setSelectedNoteId(newNote.id);
+            return newNote.id;
+        }
+    }, [notes, updateNotes, userId]);
 
     const handleTranscriptionComplete = useCallback((text: string) => {
         setShowInfo(false);
@@ -87,60 +161,173 @@ function App() {
             const now = Date.now();
             const newNote: Note = {
                 id: now.toString(),
+                userId: userId,
                 title: 'Transcribed Note',
                 content: text,
                 tags: [],
                 versions: [],
                 created: now,
-                lastEdited: now
+                lastEdited: now,
+                status: 'completed'
             };
             updateNotes([...notes, newNote]);
             setSelectedNoteId(newNote.id);
             setShowNoteList(true);
         }
-    }, [notes, updateNotes]);
+    }, [notes, updateNotes, userId]);
 
-    const handleDeleteNote = useCallback((id: string) => {
-        const updatedNotes = notes.filter(note => note.id !== id);
-        updateNotes(updatedNotes);
-        if (selectedNoteId === id) {
-            setSelectedNoteId(null);
+    // 处理音频文件上传和后台转录
+    const handleAudioUpload = useCallback(async (audioFile: File, title: string = 'Audio Note') => {
+        try {
+            setShowInfo(false);
+            // 创建带有音频文件的笔记，状态为转录中
+            const newNote = await backendAPI.createNote({
+                userId: userId,
+                title: title,
+                content: '',
+                tags: [],
+                audioFile: audioFile
+            });
+            
+            setNotes(prevNotes => [...prevNotes, newNote]);
+            setSelectedNoteId(newNote.id);
+            setShowNoteList(true);
+            
+            // 如果笔记状态是转录中，开始轮询
+            if (newNote.status === 'transcribing') {
+                const job = await backendAPI.getTranscriptionJobByNoteId(newNote.id);
+                if (job) {
+                    setTranscriptionJobs(prev => new Map(prev.set(newNote.id, job)));
+                    pollTranscriptionStatus(newNote.id, job);
+                }
+            }
+            
+            return newNote.id;
+        } catch (error) {
+            console.error('Error uploading audio:', error);
+            // 备用方案：创建本地笔记
+            const now = Date.now();
+            const newNote: Note = {
+                id: now.toString(),
+                userId: userId,
+                title: title,
+                content: '音频上传失败，请重试',
+                tags: [],
+                versions: [],
+                created: now,
+                lastEdited: now,
+                status: 'error',
+                errorMessage: '音频上传失败'
+            };
+            updateNotes([...notes, newNote]);
+            setSelectedNoteId(newNote.id);
+            setShowNoteList(true);
+            return newNote.id;
+        }
+    }, [notes, updateNotes, userId, pollTranscriptionStatus]);
+
+    const handleDeleteNote = useCallback(async (id: string) => {
+        try {
+            await backendAPI.deleteNote(id);
+            const updatedNotes = notes.filter(note => note.id !== id);
+            setNotes(updatedNotes);
+            if (selectedNoteId === id) {
+                setSelectedNoteId(null);
+            }
+            // 清理转录任务
+            setTranscriptionJobs(prev => {
+                const newMap = new Map(prev);
+                newMap.delete(id);
+                return newMap;
+            });
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            // 备用方案：本地删除
+            const updatedNotes = notes.filter(note => note.id !== id);
+            updateNotes(updatedNotes);
+            if (selectedNoteId === id) {
+                setSelectedNoteId(null);
+            }
         }
     }, [notes, selectedNoteId, updateNotes]);
 
-    const handleUpdateNote = useCallback((updatedNote: Note) => {
-        const updatedNotes = notes.map(note => 
-            note.id === updatedNote.id ? { ...updatedNote, lastEdited: Date.now() } : note
-        );
-        updateNotes(updatedNotes);
+    const handleUpdateNote = useCallback(async (updatedNote: Note) => {
+        try {
+            const serverNote = await backendAPI.updateNote({
+                id: updatedNote.id,
+                title: updatedNote.title,
+                content: updatedNote.content,
+                tags: updatedNote.tags
+            });
+            const updatedNotes = notes.map(note => 
+                note.id === updatedNote.id ? serverNote : note
+            );
+            setNotes(updatedNotes);
+        } catch (error) {
+            console.error('Error updating note:', error);
+            // 备用方案：本地更新
+            const updatedNotes = notes.map(note => 
+                note.id === updatedNote.id ? { ...updatedNote, lastEdited: Date.now() } : note
+            );
+            updateNotes(updatedNotes);
+        }
     }, [notes, updateNotes]);
 
-    const handleSaveVersion = useCallback((noteId: string, description: string) => {
-        const note = notes.find(n => n.id === noteId);
-        if (note) {
-            const newVersion: NoteVersion = {
-                content: note.content,
-                timestamp: Date.now(),
-                description
-            };
-            const updatedNote = {
-                ...note,
-                versions: [...note.versions, newVersion],
-                lastEdited: Date.now()
-            };
-            handleUpdateNote(updatedNote);
+    const handleSaveVersion = useCallback(async (noteId: string, description: string) => {
+        try {
+            const updatedNote = await backendAPI.saveNoteVersion(noteId, description);
+            const updatedNotes = notes.map(note => 
+                note.id === noteId ? updatedNote : note
+            );
+            setNotes(updatedNotes);
+        } catch (error) {
+            console.error('Error saving version:', error);
+            // 备用方案：本地保存版本
+            const note = notes.find(n => n.id === noteId);
+            if (note) {
+                const newVersion: NoteVersion = {
+                    content: note.content,
+                    timestamp: Date.now(),
+                    description
+                };
+                const updatedNote = {
+                    ...note,
+                    versions: [...note.versions, newVersion],
+                    lastEdited: Date.now()
+                };
+                handleUpdateNote(updatedNote);
+            }
         }
     }, [notes, handleUpdateNote]);
 
-    const handleRestoreVersion = useCallback((noteId: string, version: NoteVersion) => {
-        const note = notes.find(n => n.id === noteId);
-        if (note) {
-            const updatedNote = {
-                ...note,
-                content: version.content,
-                lastEdited: Date.now()
-            };
-            handleUpdateNote(updatedNote);
+    const handleRestoreVersion = useCallback(async (noteId: string, version: NoteVersion) => {
+        try {
+            // 找到版本索引
+            const note = notes.find(n => n.id === noteId);
+            if (note) {
+                const versionIndex = note.versions.findIndex(v => 
+                    v.timestamp === version.timestamp && v.description === version.description
+                );
+                if (versionIndex !== -1) {
+                    const updatedNote = await backendAPI.restoreNoteVersion(noteId, versionIndex);
+                    const updatedNotes = notes.map(n => 
+                        n.id === noteId ? updatedNote : n
+                    );
+                    setNotes(updatedNotes);
+                }
+            }
+        } catch (error) {
+            console.error('Error restoring version:', error);
+            // 备用方案：本地恢复版本
+            const note = notes.find(n => n.id === noteId);
+            if (note) {
+                const updatedNote = {
+                    ...note,
+                    content: version.content,
+                    lastEdited: Date.now()
+                };
+                handleUpdateNote(updatedNote);
+            }
         }
     }, [notes, handleUpdateNote]);
 
@@ -156,23 +343,39 @@ function App() {
         }
     }, [notes, handleUpdateNote]);
 
-    const handleExportNotes = useCallback(() => {
-        const notesBlob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(notesBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'scribe-notes-export.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [notes]);
+    const handleExportNotes = useCallback(async () => {
+        try {
+            // 尝试从后端获取最新的笔记数据
+            const latestNotes = await backendAPI.getNotes(userId);
+            const notesBlob = new Blob([JSON.stringify(latestNotes, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(notesBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `scribe-notes-export-${userId}-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error exporting notes from backend:', error);
+            // 备用方案：导出本地笔记
+            const notesBlob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(notesBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'scribe-notes-export-local.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    }, [notes, userId]);
 
     const handleImportNotes = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const importedNotes = JSON.parse(e.target?.result as string);
                     if (Array.isArray(importedNotes) && importedNotes.every(note => 
@@ -184,12 +387,34 @@ function App() {
                         const now = Date.now();
                         const migratedNotes = importedNotes.map(note => ({
                             ...note,
+                            userId: userId, // 确保导入的笔记属于当前用户
                             tags: note.tags || [],
                             versions: note.versions || [],
                             created: note.created || now,
-                            lastEdited: note.lastEdited || now
+                            lastEdited: note.lastEdited || now,
+                            status: note.status || 'completed',
+                            transcriptionProgress: note.transcriptionProgress || 0
                         }));
-                        updateNotes(migratedNotes);
+                        
+                        try {
+                            // 尝试批量导入到后端
+                            for (const note of migratedNotes) {
+                                await backendAPI.createNote({
+                                    userId: note.userId,
+                                    title: note.title,
+                                    content: note.content,
+                                    tags: note.tags
+                                });
+                            }
+                            // 重新加载笔记
+                            await loadNotes();
+                            alert('Notes imported successfully!');
+                        } catch (error) {
+                            console.error('Error importing to backend:', error);
+                            // 备用方案：本地导入
+                            updateNotes(migratedNotes);
+                            alert('Notes imported locally (backend unavailable)');
+                        }
                     } else {
                         alert('Invalid notes format');
                     }
@@ -200,7 +425,7 @@ function App() {
             };
             reader.readAsText(file);
         }
-    }, [updateNotes]);
+    }, [updateNotes, userId, loadNotes]);
 
     const filteredNotes = useMemo(() => {
         const searchLower = searchQuery.toLowerCase();
@@ -253,9 +478,10 @@ function App() {
                         <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
                             <h2 className="text-xl md:text-2xl font-semibold mb-4">Quick Record</h2>
                             <AudioManager 
-                                transcriber={transcriber}
-                                onTranscriptionComplete={handleTranscriptionComplete}
-                            />
+                    transcriber={transcriber} 
+                    onTranscriptionComplete={handleTranscriptionComplete}
+                    onAudioUpload={handleAudioUpload}
+                />
                         </div>
 
                         {showInfo && (
@@ -279,7 +505,9 @@ function App() {
                             <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
                                 <NoteEditor
                                     note={notes.find(note => note.id === selectedNoteId)!}
-                                    onUpdateNote={handleUpdateNote}
+                                    onUpdateNote={(updatedNote: Note) => {
+                                        void handleUpdateNote(updatedNote);
+                                    }}
                                     onSaveVersion={handleSaveVersion}
                                     onRestoreVersion={handleRestoreVersion}
                                     onUpdateTags={handleUpdateTags}

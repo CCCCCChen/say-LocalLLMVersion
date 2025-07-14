@@ -2,26 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { IoCopyOutline } from 'react-icons/io5';
 import { AiOutlineRobot } from 'react-icons/ai';
+import { FaTag, FaHistory, FaSave, FaUndo } from 'react-icons/fa';
 import Transcript from "./Transcript";
 import { Transcriber } from "../hooks/useTranscriber";
 import { useSummarizer } from '../hooks/useSummarizer';
 import { TextSummary } from './TextSummary';
-
-interface NoteVersion {
-  content: string;
-  timestamp: number;
-  description: string;
-}
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  tags: string[];
-  versions: NoteVersion[];
-  created: number;
-  lastEdited: number;
-}
+import { useWorkflow } from '../hooks/useWorkflow';
+import { WorkflowConfig } from './WorkflowConfig';
+import { Note, NoteVersion } from '../utils/BackendAPI';
 
 interface NoteEditorProps {
   note: Note;
