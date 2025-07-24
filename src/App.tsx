@@ -4,7 +4,7 @@ import NoteEditor from './components/NoteEditor';
 import AdminPanel from './components/AdminPanel';
 // Removed Whisper transcriber import
 import { AudioManager } from './components/AudioManager';
-import { backendAPI, Note, NoteVersion, TranscriptionJob } from './utils/BackendAPI';
+import { backendAPI, Note, NoteVersion } from './utils/BackendAPI';
 
 // Note and NoteVersion interfaces are now imported from BackendAPI
 
@@ -18,43 +18,7 @@ function App() {
     const [showInfo, setShowInfo] = useState(true);
     const [showAdmin, setShowAdmin] = useState(false);
     const [userId, setUserId] = useState<string>('user-demo-002'); // 临时用户ID
-    const [transcriptionJobs, setTranscriptionJobs] = useState<Map<string, TranscriptionJob>>(new Map());
-    const lastTranscriptionRef = useRef<string | null>(null);
-
-    // 轮询转录状态
-    const pollTranscriptionStatus = useCallback(async (noteId: string, initialJob: TranscriptionJob) => {
-        try {
-            await backendAPI.pollTranscriptionStatus(noteId, (job) => {
-                setTranscriptionJobs(prev => new Map(prev.set(noteId, job)));
-                
-                // 更新笔记状态
-                setNotes(prevNotes => 
-                    prevNotes.map(note => 
-                        note.id === noteId 
-                            ? { 
-                                ...note, 
-                                status: job.status === 'completed' ? 'completed' : 
-                                        job.status === 'failed' ? 'error' : 'transcribing',
-                                transcriptionProgress: job.progress,
-                                content: job.result || note.content,
-                                errorMessage: job.error
-                            }
-                            : note
-                    )
-                );
-            });
-        } catch (error) {
-            console.error('Error polling transcription status:', error);
-            // 更新笔记为错误状态
-            setNotes(prevNotes => 
-                prevNotes.map(note => 
-                    note.id === noteId 
-                        ? { ...note, status: 'error', errorMessage: '转录失败' }
-                        : note
-                )
-            );
-        }
-    }, []);
+    // 移除了转录相关的状态管理代码
 
     const loadNotes = useCallback(async () => {
         try {
@@ -65,23 +29,7 @@ function App() {
             const userNotes = await backendAPI.getNotes(userId);
             setNotes(userNotes);
             
-            // 检查正在进行的转录任务
-            const activeJobs = new Map<string, TranscriptionJob>();
-            for (const note of userNotes) {
-                if (note.status === 'transcribing') {
-                    try {
-                        const job = await backendAPI.getTranscriptionJobByNoteId(note.id);
-                        if (job) {
-                            activeJobs.set(note.id, job);
-                            // 开始轮询转录状态
-                            pollTranscriptionStatus(note.id, job);
-                        }
-                    } catch (error) {
-                        console.error('Error fetching transcription job for note:', note.id, error);
-                    }
-                }
-            }
-            setTranscriptionJobs(activeJobs);
+            // 移除了转录任务检查逻辑
             
         } catch (error) {
             console.error('Error loading notes from backend:', error);
@@ -107,7 +55,7 @@ function App() {
         } finally {
             setIsLoaded(true);
         }
-    }, [userId, pollTranscriptionStatus]);
+    }, [userId]);
 
     useEffect(() => {
         loadNotes();
@@ -215,7 +163,7 @@ function App() {
             setShowNoteList(true);
             return newNote.id;
         }
-    }, [notes, updateNotes, userId, pollTranscriptionStatus]);
+    }, [notes, updateNotes, userId]);
 
     const handleDeleteNote = useCallback(async (id: string) => {
         try {
@@ -225,12 +173,7 @@ function App() {
             if (selectedNoteId === id) {
                 setSelectedNoteId(null);
             }
-            // 清理转录任务
-            setTranscriptionJobs(prev => {
-                const newMap = new Map(prev);
-                newMap.delete(id);
-                return newMap;
-            });
+            // 移除了转录任务清理逻辑
         } catch (error) {
             console.error('Error deleting note:', error);
             // 备用方案：本地删除

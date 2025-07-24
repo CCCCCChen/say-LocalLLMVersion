@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 
 // 中间件配置
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-id']
@@ -149,7 +149,7 @@ app.listen(PORT, () => {
     console.log('POST /api/notes/:noteId/transcription/start - 手动启动转录');
     console.log('\n--- Environment ---');
     console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`FUNASR_URL: ${process.env.FUNASR_URL || 'http://localhost:10096'}`);
+    console.log(`FUNASR_URL: ${process.env.FUNASR_URL || 'http://localhost:10095'}`);
     console.log('\n✅ Server ready to accept connections\n');
 });
 

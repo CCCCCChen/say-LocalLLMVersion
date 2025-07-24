@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "init-db": "node src/scripts/initDatabase.js"
+    "init-db": "node src/scripts/initDatabase.js",
+    "start:docker-funasr": "./start-docker-funasr.sh",
+    "dev:docker-funasr": "USE_DOCKER_FUNASR=true nodemon src/server.js",
+    "test:docker-funasr": "node test-docker-funasr.js"
   },
   "dependencies": {
     "axios": "^1.6.2",

@@ -14,6 +14,22 @@
     "retry_attempts": 3,
     "retry_delay": 1000
   },
+  "docker": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 10095,
+    "client_type": "python",
+    "samples_dir": "./funasr-runtime-resources/samples",
+    "timeout": 300000,
+    "auto_setup": true,
+    "python_client": {
+      "install_dependencies": true,
+      "requirements_file": "requirements_client.txt"
+    },
+    "cpp_client": {
+      "executable_path": "./funasr-runtime-resources/samples/cpp/funasr-wss-client"
+    }
+  },
   "hotwords": {
     "enabled": true,
     "file_path": "./funasr_models/hotwords.txt",

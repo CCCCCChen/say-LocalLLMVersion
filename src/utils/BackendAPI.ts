@@ -180,67 +180,7 @@ class BackendAPI {
         return response.data;
     }
 
-    // Transcription management
-    async getTranscriptionJob(jobId: string): Promise<TranscriptionJob> {
-        const response = await this.request<{success: boolean, data: TranscriptionJob}>(`/transcription/${jobId}`);
-        return response.data;
-    }
-
-    async getTranscriptionJobByNoteId(noteId: string): Promise<TranscriptionJob | null> {
-        try {
-            const response = await this.request<{success: boolean, data: TranscriptionJob[]}>(`/notes/${noteId}/transcription`);
-            return response.data.length > 0 ? response.data[0] : null;
-        } catch (error) {
-            if (error instanceof Error && error.message.includes('404')) {
-                return null;
-            }
-            throw error;
-        }
-    }
-
-    async startTranscription(noteId: string): Promise<TranscriptionJob> {
-        const response = await this.request<{success: boolean, data: {jobId: string, status: string}}>(`/notes/${noteId}/transcription/start`, {
-            method: 'POST',
-        });
-        
-        // Return a basic TranscriptionJob object
-        return {
-            id: response.data.jobId,
-            noteId: noteId,
-            status: response.data.status as 'pending' | 'processing' | 'completed' | 'failed',
-            progress: 0,
-            createdAt: Date.now()
-        };
-    }
-
-
-
-    // Polling for transcription updates
-    async pollTranscriptionStatus(noteId: string, onUpdate: (job: TranscriptionJob) => void): Promise<TranscriptionJob> {
-        return new Promise((resolve, reject) => {
-            const poll = async () => {
-                try {
-                    const job = await this.getTranscriptionJobByNoteId(noteId);
-                    if (!job) {
-                        reject(new Error('Transcription job not found'));
-                        return;
-                    }
-
-                    onUpdate(job);
-
-                    if (job.status === 'completed' || job.status === 'failed') {
-                        resolve(job);
-                    } else {
-                        setTimeout(poll, 2000); // Poll every 2 seconds
-                    }
-                } catch (error) {
-                    reject(error);
-                }
-            };
-
-            poll();
-        });
-    }
+    // 移除了复杂的转录管理方法，保留基本接口定义
 }
 
 export const backendAPI = new BackendAPI();
