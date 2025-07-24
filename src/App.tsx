@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import NoteList from './components/NoteList';
 import NoteEditor from './components/NoteEditor';
 import AdminPanel from './components/AdminPanel';
-import { useTranscriber } from "./hooks/useTranscriber";
+// Removed Whisper transcriber import
 import { AudioManager } from './components/AudioManager';
 import { backendAPI, Note, NoteVersion, TranscriptionJob } from './utils/BackendAPI';
 
 // Note and NoteVersion interfaces are now imported from BackendAPI
 
 function App() {
-    const transcriber = useTranscriber();
+    // Removed Whisper transcriber initialization
     const [notes, setNotes] = useState<Note[]>([]);
     const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -155,38 +155,36 @@ function App() {
         }
     }, [notes, updateNotes, userId]);
 
+    // 简化后的函数，仅处理文本内容添加到笔记中
     const handleTranscriptionComplete = useCallback((text: string) => {
         setShowInfo(false);
-        // Only create a new note if this is a new transcription
-        if (text !== lastTranscriptionRef.current) {
-            lastTranscriptionRef.current = text;
-            const now = Date.now();
-            const newNote: Note = {
-                id: now.toString(),
-                userId: userId,
-                title: 'Transcribed Note',
-                content: text,
-                tags: [],
-                versions: [],
-                created: now,
-                lastEdited: now,
-                status: 'completed'
-            };
-            updateNotes([...notes, newNote]);
-            setSelectedNoteId(newNote.id);
-            setShowNoteList(true);
-        }
+        // 创建新笔记
+        const now = Date.now();
+        const newNote: Note = {
+            id: now.toString(),
+            userId: userId,
+            title: 'Audio Note',
+            content: text,
+            tags: [],
+            versions: [],
+            created: now,
+            lastEdited: now,
+            status: 'completed'
+        };
+        updateNotes([...notes, newNote]);
+        setSelectedNoteId(newNote.id);
+        setShowNoteList(true);
     }, [notes, updateNotes, userId]);
 
-    // 处理音频文件上传和后台转录
+    // 处理音频文件上传，简化版本，不涉及转录
     const handleAudioUpload = useCallback(async (audioFile: File, title: string = 'Audio Note') => {
         try {
             setShowInfo(false);
-            // 创建带有音频文件的笔记，状态为转录中
+            // 创建带有音频文件的笔记
             const newNote = await backendAPI.createNote({
                 userId: userId,
                 title: title,
-                content: '',
+                content: '音频文件已上传',
                 tags: [],
                 audioFile: audioFile
             });
@@ -195,15 +193,6 @@ function App() {
             console.log('New note created:', newNote);
             setSelectedNoteId(newNote.id);
             setShowNoteList(true);
-            
-            // 如果笔记状态是转录中，开始轮询
-            if (newNote.status === 'transcribing') {
-                const job = await backendAPI.getTranscriptionJobByNoteId(newNote.id);
-                if (job) {
-                    setTranscriptionJobs(prev => new Map(prev.set(newNote.id, job)));
-                    pollTranscriptionStatus(newNote.id, job);
-                }
-            }
             
             return newNote.id;
         } catch (error) {
@@ -214,13 +203,12 @@ function App() {
                 id: now.toString(),
                 userId: userId,
                 title: title,
-                content: '音频上传失败，请重试',
+                content: '音频文件已上传（本地）',
                 tags: [],
                 versions: [],
                 created: now,
                 lastEdited: now,
-                status: 'error',
-                errorMessage: '音频上传失败'
+                status: 'completed'
             };
             updateNotes([...notes, newNote]);
             setSelectedNoteId(newNote.id);
@@ -504,7 +492,6 @@ function App() {
                         <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
                             <h2 className="text-xl md:text-2xl font-semibold mb-4">Quick Record</h2>
                             <AudioManager 
-                    transcriber={transcriber} 
                     onTranscriptionComplete={handleTranscriptionComplete}
                     onAudioUpload={handleAudioUpload}
                 />
@@ -537,7 +524,6 @@ function App() {
                                     onSaveVersion={handleSaveVersion}
                                     onRestoreVersion={handleRestoreVersion}
                                     onUpdateTags={handleUpdateTags}
-                                    transcriber={transcriber}
                                     hasMicrophonePermission={true}
                                 />
                             </div>

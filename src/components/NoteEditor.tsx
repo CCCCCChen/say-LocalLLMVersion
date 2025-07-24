@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { IoCopyOutline } from 'react-icons/io5';
 import { AiOutlineRobot } from 'react-icons/ai';
 import { FaTag, FaHistory, FaSave, FaUndo } from 'react-icons/fa';
-import Transcript from "./Transcript";
-import { Transcriber } from "../hooks/useTranscriber";
+// Removed Transcript and Transcriber imports
 import { useSummarizer } from '../hooks/useSummarizer';
 import { TextSummary } from './TextSummary';
-import { useWorkflow } from '../hooks/useWorkflow';
-import { WorkflowConfig } from './WorkflowConfig';
+// Removed useWorkflow and WorkflowConfig imports
 import { Note, NoteVersion } from '../utils/BackendAPI';
 
 interface NoteEditorProps {
@@ -17,7 +15,6 @@ interface NoteEditorProps {
   onSaveVersion: (noteId: string, description: string) => void;
   onRestoreVersion: (noteId: string, version: NoteVersion) => void;
   onUpdateTags: (noteId: string, tags: string[]) => void;
-  transcriber: Transcriber;
   hasMicrophonePermission: boolean;
 }
 
@@ -27,7 +24,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
   onSaveVersion,
   onRestoreVersion,
   onUpdateTags,
-  transcriber, 
   hasMicrophonePermission 
 }) => {
   const [title, setTitle] = useState(note?.title || '');
@@ -54,37 +50,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     }
   }, [note]);
 
-  const cleanText = (text: string) => {
-    return text
-      .replace(/\s+/g, ' ')
-      .replace(/([.,!?])([^\s])/g, '$1 $2')
-      .replace(/\s+([.,!?])/g, '$1')
-      .trim();
-  };
-
-  const handleTranscriptionUpdate = useCallback((newTranscript: string) => {
-    if (newTranscript !== lastTranscriptRef.current) {
-      console.log('New transcript received:', newTranscript);
-      const newContent = newTranscript.slice(lastTranscriptRef.current.length);
-      const cleanedContent = cleanText(newContent);
-      
-      if (editorRef.current) {
-        const editor = editorRef.current;
-        editor.execCommand('mceInsertContent', false, ' ' + cleanedContent);
-        const updatedContent = editor.getContent();
-        setContent(updatedContent);
-        onUpdateNote({ ...note, content: updatedContent });
-      }
-      
-      lastTranscriptRef.current = newTranscript;
-    }
-  }, [note, onUpdateNote]);
-
-  useEffect(() => {
-    if (transcriber.output && transcriber.output.text) {
-      handleTranscriptionUpdate(transcriber.output.text);
-    }
-  }, [transcriber.output, handleTranscriptionUpdate]);
+  // Removed transcription-related functions
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
@@ -326,9 +292,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
         </div>
       )}
 
-      <div className="w-full flex flex-col my-2 p-4 max-h-[20rem] overflow-y-auto">
-        <Transcript transcript={transcriber.output?.text || ''} />
-      </div>
+      {/* Removed Transcript component */}
 
       {note.versions.length > 0 && (
         <div className="mt-8 border-t pt-4">

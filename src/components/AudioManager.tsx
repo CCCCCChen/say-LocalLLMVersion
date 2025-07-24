@@ -3,16 +3,9 @@ import axios from "axios";
 import Modal from "./modal/Modal";
 import { UrlInput } from "./modal/UrlInput";
 import AudioPlayer from "./AudioPlayer";
-import { TranscribeButton } from "./TranscribeButton";
-import { WorkflowButton } from "./WorkflowButton";
 import Constants from "../utils/Constants";
-import { Transcriber } from "../hooks/useTranscriber";
-import { useWorkflow } from "../hooks/useWorkflow";
 import Progress from "./Progress";
 import AudioRecorder from "./AudioRecorder";
-import { ModelSelector } from "./ModelSelector";
-import { WorkflowConfig } from "./WorkflowConfig";
-import { defaultDifyConfig } from "../utils/DifyAPI";
 
 // Utility function to convert AudioBuffer to WAV Blob
 function audioBufferToWav(audioBuffer: AudioBuffer, mimeType: string): Blob {
@@ -65,13 +58,11 @@ export enum AudioSource {
 }
 
 interface Props {
-    transcriber: Transcriber;
     onTranscriptionComplete?: (text: string) => void;
     onAudioUpload?: (audioFile: File, title?: string) => Promise<string>;
 }
 
-export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUpload }: Props) {
-    const workflow = useWorkflow();
+export function AudioManager({ onTranscriptionComplete, onAudioUpload }: Props) {
     const [progress, setProgress] = useState<number | undefined>(undefined);
     const [audioData, setAudioData] = useState<{
         buffer: AudioBuffer;
@@ -83,7 +74,6 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
     const [audioDownloadUrl, setAudioDownloadUrl] = useState<string | undefined>(undefined);
     const [showUrlModal, setShowUrlModal] = useState(false);
     const [showRecordModal, setShowRecordModal] = useState(false);
-    const [difyConfig, setDifyConfig] = useState(defaultDifyConfig);
 
     const isAudioLoading = progress !== undefined;
 
@@ -91,18 +81,9 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
         setAudioData(undefined);
         setAudioDownloadUrl(undefined);
         setProgress(undefined);
-        // Note: transcriber doesn't have a reset method, it manages its own state
-        workflow.reset();
-    }, [workflow]);
+    }, []);
 
-    // Watch for transcription completion
-    useEffect(() => {
-        // Only call onTranscriptionComplete when transcription is finished (not busy) and we have output
-        if (transcriber.output && !transcriber.isBusy && onTranscriptionComplete) {
-            onTranscriptionComplete(transcriber.output.text);
-            resetAudio();
-        }
-    }, [transcriber.output?.text, transcriber.isBusy, onTranscriptionComplete]);
+    // Audio processing functions
 
     const setAudioFromDownload = async (data: ArrayBuffer, mimeType: string) => {
         const audioCTX = new AudioContext({ sampleRate: Constants.SAMPLING_RATE });
@@ -161,14 +142,14 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
         resetAudio();
         setProgress(0);
         
-        // 如果支持后台转录，直接上传文件
+        // 如果支持后台处理，直接上传文件
         if (onAudioUpload) {
             try {
                 await onAudioUpload(file, file.name);
                 setProgress(undefined);
                 return;
             } catch (error) {
-                console.error('Error uploading audio for background transcription:', error);
+                console.error('Error uploading audio file:', error);
                 // 如果上传失败，继续本地处理
             }
         }
@@ -185,7 +166,6 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
             const audioCTX = new AudioContext({ sampleRate: Constants.SAMPLING_RATE });
             const decoded = await audioCTX.decodeAudioData(arrayBuffer);
             setProgress(undefined);
-            transcriber.onInputChange();
             setAudioData({
                 buffer: decoded,
                 url: blobUrl,
@@ -234,39 +214,9 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
         }
     }, [audioDownloadUrl]);
 
-    const handleTranscribeClick = useCallback(() => {
-        if (!audioData) return;
-        transcriber.onInputChange(); // Reset transcriber state
-        transcriber.start(audioData.buffer);
-    }, [audioData, transcriber]);
+    // Removed Whisper transcription and Dify workflow functions
 
-    const handleWorkflowClick = useCallback(async () => {
-        if (audioData) {
-            try {
-                console.log('Audio Mime Type:', audioData.mimeType, 'Audio Data:', audioData.type);
-                // Convert AudioBuffer to WAV format for workflow processing
-                const audioBlob = audioBufferToWav(audioData.buffer, audioData.mimeType);
-                const fileName = `audio-${Date.now()}.${audioData.type || 'wav'}`;
-                // const fileName = `audio-${Date.now()}.${audioData.mimeType.split('/')[1] || 'wav'}`;
-                await workflow.processAudio(audioBlob, fileName);
-            } catch (error) {
-                console.error('Workflow processing failed:', error);
-            }
-        }
-    }, [audioData, workflow]);
-
-    const handleConfigChange = useCallback((config: Partial<typeof difyConfig>) => {
-        const newConfig = { ...difyConfig, ...config };
-        setDifyConfig(newConfig);
-        workflow.updateConfig(newConfig);
-    }, [difyConfig, workflow]);
-
-    const handleModelChange = useCallback((modelId: string) => {
-        transcriber.setModel(modelId);
-        // Update multilingual setting based on model selection
-        const isEnglishOnly = modelId.endsWith('.en');
-        transcriber.setMultilingual(!isEnglishOnly);
-    }, [transcriber]);
+    // Removed Dify config and Whisper model change handlers
 
     const convertToMp3 = async (audioBuffer: AudioBuffer): Promise<Blob> => {
         // Create an offline audio context
@@ -395,17 +345,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
                 </div>
             )}
             
-            <ModelSelector 
-                selectedModel={transcriber.model}
-                onModelChange={handleModelChange}
-                className="mb-6"
-            />
-            
-            <WorkflowConfig
-                config={difyConfig}
-                onConfigChange={handleConfigChange}
-                className="mb-6"
-            />
+            {/* Removed ModelSelector and WorkflowConfig components */}
 
             {isAudioLoading && (
                 <div className="w-full bg-gray-200 rounded-full h-1">
@@ -421,18 +361,7 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
                     <AudioPlayer audioUrl={audioData.url} mimeType={audioData.mimeType} />
                     
                     <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <TranscribeButton
-                                onClick={handleTranscribeClick}
-                                isModelLoading={transcriber.isModelLoading}
-                                isTranscribing={transcriber.isBusy}
-                            />
-                            
-                            <WorkflowButton
-                                onClick={handleWorkflowClick}
-                                isProcessing={workflow.state.isProcessing}
-                            />
-                        </div>
+                        {/* Removed TranscribeButton and WorkflowButton components */}
                         
                         <div className="flex justify-center">
                             <button
@@ -454,70 +383,9 @@ export function AudioManager({ transcriber, onTranscriptionComplete, onAudioUplo
                         Export Audio
                     </button>
 
-                    {transcriber.progressItems.length > 0 && (
-                        <div className="space-y-2">
-                            <label className="text-sm text-slate-600">
-                                Loading model files... (only run once)
-                            </label>
-                            {transcriber.progressItems.map((data, index) => (
-                                <Progress
-                                    key={`${data.file}-${index}`}
-                                    text={data.file}
-                                    percentage={data.progress}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    {/* Removed model loading progress display */}
                     
-                    {workflow.state.isProcessing && (
-                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
-                                <span className="text-sm font-medium text-purple-800">Workflow Processing</span>
-                            </div>
-                            {workflow.state.progress && (
-                                <p className="text-sm text-purple-600">{workflow.state.progress}</p>
-                            )}
-                        </div>
-                    )}
-                    
-                    {workflow.state.error && (
-                        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div>
-                                    <h4 className="text-sm font-medium text-red-800 mb-1">Workflow Error</h4>
-                                    <p className="text-sm text-red-600">{workflow.state.error}</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {workflow.state.result && (
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                            <div className="flex items-start gap-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-medium text-green-800 mb-2">Workflow Result</h4>
-                                    <div className="bg-white rounded border p-3 text-sm">
-                                        <pre className="whitespace-pre-wrap text-slate-700 overflow-x-auto">
-                                            {JSON.stringify(workflow.state.result.data.outputs, null, 2)}
-                                        </pre>
-                                    </div>
-                                    <div className="mt-2 text-xs text-green-600">
-                                        Completed in {workflow.state.result.data.elapsed_time}ms
-                                        {workflow.state.result.data.total_tokens && (
-                                            <span> • {workflow.state.result.data.total_tokens} tokens used</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {/* Removed Dify workflow status display */}
                 </div>
             )}
 
