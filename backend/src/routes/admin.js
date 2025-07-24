@@ -167,7 +167,16 @@ router.post('/test/funasr', devAuth, async (req, res) => {
         let wsHealth = false;
         try {
             const WebSocket = require('ws');
-            const ws = new WebSocket(funasrService.wsUrl);
+            const wsOptions = {
+                subprotocols: ['binary'],
+                pingInterval: null
+            };
+            
+            if (funasrService.ssl) {
+                wsOptions.rejectUnauthorized = false;
+            }
+            
+            const ws = new WebSocket(funasrService.wsUrl, wsOptions);
             
             await new Promise((resolve, reject) => {
                 const timeout = setTimeout(() => {
@@ -196,8 +205,72 @@ router.post('/test/funasr', devAuth, async (req, res) => {
             data: {
                 http: httpHealth ? 'healthy' : 'unavailable',
                 websocket: wsHealth ? 'healthy' : 'unavailable',
-                httpUrl: funasrService.baseUrl,
-                wsUrl: funasrService.wsUrl
+                httpUrl: funasrService.httpUrl,
+                wsUrl: funasrService.wsUrl,
+                config: {
+                    host: funasrService.host,
+                    port: funasrService.port,
+                    ssl: funasrService.ssl,
+                    mode: funasrService.mode,
+                    chunkSize: funasrService.chunkSize,
+                    useItn: funasrService.useItn
+                }
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 获取FunASR配置
+router.get('/funasr/config', devAuth, async (req, res) => {
+    try {
+        res.json({
+            success: true,
+            data: {
+                host: funasrService.host,
+                port: funasrService.port,
+                ssl: funasrService.ssl,
+                mode: funasrService.mode,
+                chunkSize: funasrService.chunkSize,
+                chunkInterval: funasrService.chunkInterval,
+                encoderChunkLookBack: funasrService.encoderChunkLookBack,
+                decoderChunkLookBack: funasrService.decoderChunkLookBack,
+                useItn: funasrService.useItn,
+                audioFs: funasrService.audioFs,
+                wsUrl: funasrService.wsUrl,
+                httpUrl: funasrService.httpUrl
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// 更新FunASR配置
+router.post('/funasr/config', devAuth, async (req, res) => {
+    try {
+        const config = req.body;
+        funasrService.setConfig(config);
+        
+        res.json({
+            success: true,
+            data: {
+                message: 'FunASR配置已更新',
+                config: {
+                    host: funasrService.host,
+                    port: funasrService.port,
+                    ssl: funasrService.ssl,
+                    mode: funasrService.mode,
+                    chunkSize: funasrService.chunkSize,
+                    useItn: funasrService.useItn
+                }
             }
         });
     } catch (error) {

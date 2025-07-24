@@ -1,0 +1,44 @@
+{
+  "funasr": {
+    "host": "localhost",
+    "port": 10095,
+    "ssl": false,
+    "mode": "2pass",
+    "chunk_size": [5, 10, 5],
+    "chunk_interval": 10,
+    "encoder_chunk_look_back": 4,
+    "decoder_chunk_look_back": 0,
+    "use_itn": true,
+    "audio_fs": 16000,
+    "timeout": 300000,
+    "retry_attempts": 3,
+    "retry_delay": 1000
+  },
+  "hotwords": {
+    "enabled": true,
+    "file_path": "./funasr_models/hotwords.txt",
+    "custom_words": {
+      "阿里巴巴": 20,
+      "人工智能": 15,
+      "语音识别": 15
+    }
+  },
+  "audio": {
+    "supported_formats": [".wav", ".mp3", ".flac", ".m4a", ".aac", ".ogg", ".wma", ".amr", ".3gp", ".mp4", ".pcm"],
+    "max_file_size": 104857600,
+    "default_sample_rate": 16000,
+    "auto_convert": true
+  },
+  "output": {
+    "include_timestamp": true,
+    "include_confidence": false,
+    "format": "json",
+    "save_intermediate_results": false
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "./logs/funasr.log",
+    "max_size": "10MB",
+    "backup_count": 5
+  }
+}
