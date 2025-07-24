@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 public/models
-
+backend/uploads
 # Local Netlify folder
 .netlify

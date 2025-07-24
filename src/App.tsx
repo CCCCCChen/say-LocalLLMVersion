@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import NoteList from './components/NoteList';
 import NoteEditor from './components/NoteEditor';
+import AdminPanel from './components/AdminPanel';
 import { useTranscriber } from "./hooks/useTranscriber";
 import { AudioManager } from './components/AudioManager';
 import { backendAPI, Note, NoteVersion, TranscriptionJob } from './utils/BackendAPI';
@@ -15,7 +16,8 @@ function App() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showNoteList, setShowNoteList] = useState(false);
     const [showInfo, setShowInfo] = useState(true);
-    const [userId, setUserId] = useState<string>('user-demo-001'); // 临时用户ID
+    const [showAdmin, setShowAdmin] = useState(false);
+    const [userId, setUserId] = useState<string>('user-demo-002'); // 临时用户ID
     const [transcriptionJobs, setTranscriptionJobs] = useState<Map<string, TranscriptionJob>>(new Map());
     const lastTranscriptionRef = useRef<string | null>(null);
 
@@ -190,6 +192,7 @@ function App() {
             });
             
             setNotes(prevNotes => [...prevNotes, newNote]);
+            console.log('New note created:', newNote);
             setSelectedNoteId(newNote.id);
             setShowNoteList(true);
             
@@ -309,7 +312,7 @@ function App() {
                     v.timestamp === version.timestamp && v.description === version.description
                 );
                 if (versionIndex !== -1) {
-                    const updatedNote = await backendAPI.restoreNoteVersion(noteId, versionIndex);
+                    const updatedNote = await backendAPI.restoreNoteVersion(noteId, String(versionIndex));
                     const updatedNotes = notes.map(n => 
                         n.id === noteId ? updatedNote : n
                     );
@@ -430,12 +433,25 @@ function App() {
     const filteredNotes = useMemo(() => {
         const searchLower = searchQuery.toLowerCase();
         return notes.filter(note => {
+            // 安全访问 title 和 content，并转为字符串
+            const title = typeof note.title === 'string' ? note.title : '';
+            const content = typeof note.content === 'string' ? note.content : '';
+            
+            // 安全处理 tags 数组
+            const tags = Array.isArray(note.tags) 
+                ? note.tags 
+                : typeof note.tags === 'string' 
+                    ? [note.tags] 
+                    : [];
+
             return (
-                note.title.toLowerCase().includes(searchLower) ||
-                note.content.toLowerCase().includes(searchLower) ||
-                note.tags.some(tag => tag.toLowerCase().includes(searchLower))
+                title.toLowerCase().includes(searchLower) ||
+                content.toLowerCase().includes(searchLower) ||
+                tags.some(tag => 
+                    typeof tag === 'string' && tag.toLowerCase().includes(searchLower)
+                )
             );
-        })
+        });
     }, [notes, searchQuery]);
 
     if (!isLoaded) {
@@ -454,26 +470,36 @@ function App() {
                         >
                             {showNoteList ? 'Hide Notes' : 'Show Notes'}
                         </button>
+                        <button
+                            onClick={() => setShowAdmin(!showAdmin)}
+                            className="px-3 py-1 text-sm bg-orange-600 hover:bg-orange-500 rounded-md transition-colors"
+                        >
+                            {showAdmin ? 'Exit Admin' : 'Admin Panel'}
+                        </button>
                     </div>
                 </div>
             </header>
             <main className='flex-grow flex flex-col md:flex-row'>
-                {showNoteList && (
-                    <aside className='w-full md:w-72 bg-white border-b md:border-r border-slate-200 p-4 overflow-y-auto'>
-                        <NoteList
-                            notes={filteredNotes}
-                            selectedNoteId={selectedNoteId}
-                            onSelectNote={setSelectedNoteId}
-                            onDeleteNote={handleDeleteNote}
-                            onCreateNote={handleCreateNote}
-                            searchQuery={searchQuery}
-                            onSearchChange={setSearchQuery}
-                            onExportNotes={handleExportNotes}
-                            onImportNotes={handleImportNotes}
-                        />
-                    </aside>
-                )}
-                <section className={`flex-grow p-2 md:p-4 ${showNoteList ? 'md:w-[calc(100%-18rem)]' : 'w-full'}`}>
+                {showAdmin ? (
+                    <AdminPanel />
+                ) : (
+                    <>
+                        {showNoteList && (
+                            <aside className='w-full md:w-72 bg-white border-b md:border-r border-slate-200 p-4 overflow-y-auto'>
+                                <NoteList
+                                    notes={filteredNotes}
+                                    selectedNoteId={selectedNoteId}
+                                    onSelectNote={setSelectedNoteId}
+                                    onDeleteNote={handleDeleteNote}
+                                    onCreateNote={handleCreateNote}
+                                    searchQuery={searchQuery}
+                                    onSearchChange={setSearchQuery}
+                                    onExportNotes={handleExportNotes}
+                                    onImportNotes={handleImportNotes}
+                                />
+                            </aside>
+                        )}
+                        <section className={`flex-grow p-2 md:p-4 ${showNoteList ? 'md:w-[calc(100%-18rem)]' : 'w-full'}`}>
                     <div className="max-w-4xl mx-auto space-y-4 md:space-y-6">
                         <div className="bg-white rounded-xl shadow-lg p-4 md:p-6">
                             <h2 className="text-xl md:text-2xl font-semibold mb-4">Quick Record</h2>
@@ -518,6 +544,8 @@ function App() {
                         )}
                     </div>
                 </section>
+                    </>
+                )}
             </main>
         </div>
     );
